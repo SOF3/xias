@@ -544,12 +544,12 @@ mod tests {
         }
     }
 
-    test_trunc_int_panic_overflow!{
+    test_trunc_int_panic_overflow! {
         f32;
         u8, u16, u32, u64, usize,
         i8, i16, i32, i64, isize
     }
-    test_trunc_int_panic_overflow!{
+    test_trunc_int_panic_overflow! {
         f64;
         u8, u16, u32, u64, u128, usize,
         i8, i16, i32, i64, i128, isize
