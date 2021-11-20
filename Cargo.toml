@@ -1,6 +1,6 @@
 [package]
 name = "xias"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["SOFe <sofe2038@gmail.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -8,3 +8,6 @@ repository = "https://github.com/SOF3/xias"
 homepage = "https://github.com/SOF3/xias"
 readme = "README.md"
 description = "Explicit numeric type conversions"
+
+[dev-dependencies]
+paste = "1.0.6"
