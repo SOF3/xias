@@ -6,6 +6,9 @@
 pub trait Xias {
     /// Convert between signed and unsigned types of the same integer,
     /// assuming that the value is homogeneous over the conversion.
+    ///
+    /// # Panics
+    /// Panics if the value is out of range after conversion.
     fn homosign<T>(self) -> T
     where
         Self: Homosign<T>,
@@ -14,6 +17,9 @@ pub trait Xias {
     }
 
     /// Downscale the precision of a floating point value.
+    ///
+    /// # Panics
+    /// Panics if the value is infinite after conversion.
     fn lossy_float<T>(self) -> T
     where
         Self: LossyFloat<T>,
@@ -23,6 +29,9 @@ pub trait Xias {
 
     /// Reduce the size of an integer,
     /// assuming that the value is within the range of the new type.
+    ///
+    /// # Panics
+    /// Panics if the value is out of range after conversion.
     fn small_int<T>(self) -> T
     where
         Self: SmallInt<T>,
@@ -32,11 +41,26 @@ pub trait Xias {
 
     /// Converts an integer to a floating point value,
     /// assuming that the value can be losslessly represented in the new type.
+    ///
+    /// # Panics
+    /// Panics if the value is infinite after conversion.
     fn small_float<T>(self) -> T
     where
         Self: SmallFloat<T>,
     {
         SmallFloat::small_float(self)
+    }
+
+    /// Converts a floating point value to an integer
+    /// by calling the [`f32::trunc`]/[`f64::trunc`] method.
+    ///
+    /// # Panics
+    /// Panics if the truncated integer is not in the range of the output type.
+    fn trunc_int<T>(self) -> T
+    where
+        Self: TruncInt<T>,
+    {
+        TruncInt::trunc_int(self)
     }
 }
 
@@ -91,9 +115,9 @@ impl_homosign!(u64, i64);
 impl_homosign!(u128, i128);
 impl_homosign!(usize, isize);
 
-/// See [`LossyFloat::lossy_float`].
+/// See [`Xias::lossy_float`].
 pub trait LossyFloat<T>: Sized {
-    /// See [`LossyFloat::lossy_float`].
+    /// See [`Xias::lossy_float`].
     fn lossy_float(self) -> T;
 }
 
@@ -114,9 +138,9 @@ impl LossyFloat<f32> for f64 {
     }
 }
 
-/// See [`SmallInt::small_int`].
+/// See [`Xias::small_int`].
 pub trait SmallInt<T>: Sized {
-    /// See [`SmallInt::small_int`].
+    /// See [`Xias::small_int`].
     fn small_int(self) -> T;
 }
 
@@ -149,9 +173,9 @@ impl_small_int!(i64; i32, i16, i8, isize);
 impl_small_int!(i128; i64, i32, i16, i8, isize);
 impl_small_int!(isize; i128, i64, i32, i16, i8);
 
-/// See [`SmallFloat::small_float`].
+/// See [`Xias::small_float`].
 pub trait SmallFloat<T>: Sized {
-    /// See [`SmallFloat::small_float`].
+    /// See [`Xias::small_float`].
     fn small_float(self) -> T;
 }
 
@@ -164,7 +188,7 @@ macro_rules! impl_small_float_unsigned {
                         let float_size = <$to>::MANTISSA_DIGITS;
                         let int_size = <$from>::BITS - self.leading_zeros();
                         float_size >= int_size
-                    }, "{:?} is too large to fit into {}", self, stringify!($to));
+                    }, "{:?} cannot fit into {}", self, stringify!($to));
 
                     self as $to
                 }
@@ -189,7 +213,7 @@ macro_rules! impl_small_float_signed {
                             <$from>::BITS - self.leading_zeros()
                         };
                         float_size >= int_size
-                    }, "{:?} is too large to fit into {}", self, stringify!($to));
+                    }, "{:?} cannot fit into {}", self, stringify!($to));
 
                     self as $to
                 }
@@ -201,12 +225,44 @@ macro_rules! impl_small_float_signed {
 impl_small_float_signed!(i8, i16, i32, i64, i128, isize; f32);
 impl_small_float_signed!(i8, i16, i32, i64, i128, isize; f64);
 
+/// See [`Xias::trunc_int`].
+pub trait TruncInt<T>: Sized {
+    /// See [`Xias::trunc_int`].
+    fn trunc_int(self) -> T;
+}
+
+macro_rules! impl_trunc_int {
+    ($float:ty; $($int:ty),*) => {
+        $(
+            impl TruncInt<$int> for $float {
+                fn trunc_int(self) -> $int {
+                    debug_assert!(self.is_finite(), "Cannot convert a non-finite float ({:?}) to {}", self, stringify!($int));
+                    let float = self.trunc();
+                    debug_assert!(<$int>::MIN as $float <= float, "{:?} is too small to fit into {}", self, stringify!($int));
+                    debug_assert!(<$int>::MAX as $float >= float, "{:?} is too large to fit into {}", self, stringify!($int));
+                    float as $int
+                }
+            }
+        )*
+    }
+}
+
+impl_trunc_int! {
+    f32;
+    u8, u16, u32, u64, u128, usize,
+    i8, i16, i32, i64, i128, isize
+}
+impl_trunc_int! {
+    f64;
+    u8, u16, u32, u64, u128, usize,
+    i8, i16, i32, i64, i128, isize
+}
+
 #[cfg(all(test, debug_assertions))]
 mod tests {
     use paste::paste;
 
     use super::Xias;
-
 
     // homosign tests
 
@@ -263,7 +319,7 @@ mod tests {
                     value.homosign::<$signed>();
                 }
             }
-        }
+        };
     }
 
     test_homosign!(i8, u8);
@@ -272,7 +328,6 @@ mod tests {
     test_homosign!(i64, u64);
     test_homosign!(i128, u128);
     test_homosign!(isize, usize);
-
 
     // lossy_float tests
 
@@ -295,7 +350,6 @@ mod tests {
         let float = f64::from(f32::MIN) * 2.;
         float.lossy_float::<f32>();
     }
-
 
     // small_int tests
 
@@ -358,7 +412,6 @@ mod tests {
     test_small_int_signed!(i64; i32, i16, i8);
     test_small_int_signed!(i128; i64, i32, i16, i8);
 
-
     // small_float tests
 
     macro_rules! test_small_float {
@@ -399,27 +452,106 @@ mod tests {
         i8, i16, i32, i64, i128, isize
     }
 
-    #[test]
-    #[should_panic(expected = "is too large to fit into f32")]
-    fn test_small_float_panic_overflow_positive_u32() {
-        u32::MAX.small_float::<f32>();
+    macro_rules! test_small_float_panic_overflow {
+        ($int:ty, $float:ty) => {
+            paste! {
+                #[test]
+                #[should_panic(expected = "cannot fit into")]
+                fn [<test_small_float_panic_overflow_ $int _ $float>]() {
+                    <$int>::MAX.small_float::<$float>();
+                }
+            }
+        };
     }
 
-    #[test]
-    #[should_panic(expected = "is too large to fit into f32")]
-    fn test_small_float_panic_overflow_positive_i32() {
-        i32::MAX.small_float::<f32>();
+    test_small_float_panic_overflow!(u32, f32);
+    test_small_float_panic_overflow!(i32, f32);
+    test_small_float_panic_overflow!(u64, f64);
+    test_small_float_panic_overflow!(i64, f64);
+
+    macro_rules! test_small_float_panic_underflow {
+        ($int:ty, $float:ty) => {
+            paste! {
+                #[test]
+                #[should_panic(expected = "cannot fit into")]
+                fn [<test_small_float_panic_underflow_ $int _ $float>]() {
+                    <$int>::MIN.small_float::<$float>();
+                }
+            }
+        };
     }
 
-    #[test]
-    #[should_panic(expected = "is too large to fit into f64")]
-    fn test_small_float_panic_overflow_positive_u64() {
-        u64::MAX.small_float::<f64>();
+    test_small_float_panic_underflow!(i32, f32);
+    test_small_float_panic_underflow!(i64, f64);
+
+    macro_rules! test_trunc_int {
+        ($float:ty; $($int:ty),*) => {
+            paste! {
+                $(
+                    #[test]
+                    fn [<test_trunc_int_ $float _ $int>]() {
+                        let float = 1.5;
+                        let expect: $int = 1;
+                        let actual = float.trunc_int::<$int>();
+                        assert_eq!(expect, actual);
+                    }
+
+                    #[test]
+                    #[should_panic(expected = "Cannot convert a non-finite float (inf) to")]
+                    fn [<test_trunc_int_panic_positive_infinity_ $float _ $int>]() {
+                        <$float>::INFINITY.trunc_int::<$int>();
+                    }
+
+                    #[test]
+                    #[should_panic(expected = "Cannot convert a non-finite float (-inf) to")]
+                    fn [<test_trunc_int_panic_negative_infinity_ $float _ $int>]() {
+                        <$float>::NEG_INFINITY.trunc_int::<$int>();
+                    }
+
+                    #[test]
+                    #[should_panic(expected = "Cannot convert a non-finite float (NaN) to")]
+                    fn [<test_trunc_int_panic_nan_ $float _ $int>]() {
+                        <$float>::NAN.trunc_int::<$int>();
+                    }
+                )*
+            }
+        }
     }
 
-    #[test]
-    #[should_panic(expected = "is too large to fit into f64")]
-    fn test_small_float_panic_overflow_positive_i64() {
-        i64::MAX.small_float::<f64>();
+    test_trunc_int! {
+        f32;
+        u8, u16, u32, u64, u128, usize,
+        i8, i16, i32, i64, i128
+    }
+    test_trunc_int! {
+        f64;
+        u8, u16, u32, u64, u128, usize,
+        i8, i16, i32, i64, i128
+    }
+
+    macro_rules! test_trunc_int_panic_overflow {
+        ($float:ty; $($int:ty),*) => {
+            paste! {
+                $(
+                    #[test]
+                    #[should_panic(expected = "is too large to fit into")]
+                    fn [<test_trunc_int_panic_overflow_ $float _ $int>]() {
+                        let float = <$int>::MAX as $float * 2.;
+                        float.trunc_int::<$int>();
+                    }
+                )*
+            }
+        }
+    }
+
+    test_trunc_int_panic_overflow!{
+        f32;
+        u8, u16, u32, u64, usize,
+        i8, i16, i32, i64, isize
+    }
+    test_trunc_int_panic_overflow!{
+        f64;
+        u8, u16, u32, u64, u128, usize,
+        i8, i16, i32, i64, i128, isize
     }
 }
