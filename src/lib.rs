@@ -160,18 +160,18 @@ macro_rules! impl_small_int {
 }
 
 impl_small_int!(u8; u8, usize);
-impl_small_int!(u16; u8, usize);
-impl_small_int!(u32; u16, u8, usize);
-impl_small_int!(u64; u32, u16, u8, usize);
-impl_small_int!(u128; u64, u32, u16, u8, usize);
-impl_small_int!(usize; u128, u64, u32, u16, u8);
+impl_small_int!(u16; u16, u8, usize);
+impl_small_int!(u32; u32, u16, u8, usize);
+impl_small_int!(u64; u64, u32, u16, u8, usize);
+impl_small_int!(u128; u128, u64, u32, u16, u8, usize);
+impl_small_int!(usize; u128, u64, u32, u16, u8, usize);
 
-impl_small_int!(i8; isize);
-impl_small_int!(i16; i8, isize);
-impl_small_int!(i32; i16, i8, isize);
-impl_small_int!(i64; i32, i16, i8, isize);
-impl_small_int!(i128; i64, i32, i16, i8, isize);
-impl_small_int!(isize; i128, i64, i32, i16, i8);
+impl_small_int!(i8; i8, isize);
+impl_small_int!(i16; i16, i8, isize);
+impl_small_int!(i32; i32, i16, i8, isize);
+impl_small_int!(i64; i64, i32, i16, i8, isize);
+impl_small_int!(i128; i128, i64, i32, i16, i8, isize);
+impl_small_int!(isize; i128, i64, i32, i16, i8, isize);
 
 /// See [`Xias::small_float`].
 pub trait SmallFloat<T>: Sized {
